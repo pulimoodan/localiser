@@ -1,0 +1,45 @@
+{
+  "name": "@pulimoodan/localiser",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "AI-powered internationalization tool that automatically translates JSON locale files using OpenAI's GPT-4 model",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "bin": {
+    "localiser": "index.js"
+  },
+  "keywords": [
+    "localiser",
+    "translator",
+    "locales",
+    "translate",
+    "i18n",
+    "internationalization",
+    "openai",
+    "gpt-4",
+    "cli",
+    "json"
+  ],
+  "author": "pulimoodan",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pulimoodan/localiser.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pulimoodan/localiser/issues"
+  },
+  "homepage": "https://github.com/pulimoodan/localiser#readme",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {
+    "commander": "^14.0.0",
+    "dotenv": "^17.2.1",
+    "fs-extra": "^11.3.1",
+    "openai": "^5.12.0"
+  }
+}
