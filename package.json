@@ -1,7 +1,7 @@
 {
   "name": "@pulimoodan/localiser",
   "type": "module",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "AI-powered internationalization tool that automatically translates JSON locale files using OpenAI's GPT-4 model",
   "main": "index.js",
   "scripts": {
