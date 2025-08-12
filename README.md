@@ -75,7 +75,7 @@ loaliser
 ### Translate Specific Language
 
 ```bash
-loaliser --language fr
+loaliser --language fr,es
 ```
 
 ### Translate Specific Namespaces
@@ -100,7 +100,7 @@ localiser --config custom-config.json
 
 | Option        | Short | Description                      | Default                   |
 | ------------- | ----- | -------------------------------- | ------------------------- |
-| `--language`  | `-l`  | Target language code             | All configured languages  |
+| `--language`  | `-l`  | Target languages code            | All configured languages  |
 | `--namespace` | `-n`  | Specific namespaces to translate | All configured namespaces |
 | `--config`    | `-c`  | Path to configuration file       | `localiser.json`          |
 

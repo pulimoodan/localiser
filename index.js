@@ -49,10 +49,14 @@ class Localiser {
       .name("localiser")
       .description("AI-powered internationalization tool")
       .version("1.0.0")
-      .option("-l, --language <language>", "Target language (e.g., fr, de)", "")
+      .option(
+        "-l, --language <language>",
+        "Target language(s) (e.g., fr, de or fr,de,es)",
+        (value) => value.split(",").map((language) => language.trim())
+      )
       .option(
         "-n, --namespace <namespace>",
-        "Namespace for translation (e.g., home, common)",
+        "Namespace(s) for translation (e.g., home, common or home,common,user)",
         (value) => value.split(",").map((namespace) => namespace.trim())
       )
       .option(
@@ -237,6 +241,39 @@ Return the translated JSON object with the same structure.`;
   }
 
   /**
+   * Validate that specified languages exist in the project configuration
+   * @param {Array<string>} inputLanguages - Languages to validate
+   * @returns {Object} Validation result with valid languages and any errors
+   */
+  validateLanguages(inputLanguages) {
+    if (!inputLanguages || inputLanguages.length === 0) {
+      return {
+        valid: this.config.languages.filter(
+          (lang) => lang !== this.config.sourceLanguage
+        ),
+        errors: [],
+      };
+    }
+    const validLanguages = [];
+    const invalidLanguages = [];
+
+    for (const language of inputLanguages) {
+      if (
+        this.config.languages.includes(language) &&
+        language !== this.config.sourceLanguage
+      ) {
+        validLanguages.push(language);
+      } else if (language === this.config.sourceLanguage) {
+        invalidLanguages.push(`${language} (source language)`);
+      } else {
+        invalidLanguages.push(language);
+      }
+    }
+
+    return { valid: validLanguages, errors: invalidLanguages };
+  }
+
+  /**
    * Process locale files for a specific language
    * @param {string} sourceLanguage - Source language code
    * @param {string} targetLanguage - Target language code
@@ -248,11 +285,7 @@ Return the translated JSON object with the same structure.`;
     const targetLanguageDir = path.join(this.config.directory, targetLanguage);
 
     await fs.ensureDir(targetLanguageDir);
-
-    // Use pre-validated namespaces (validation already done in run())
-    const validNamespaces =
-      namespaces && namespaces.length > 0 ? namespaces : this.config.namespaces;
-    const namespaceFiles = validNamespaces.map((ns) => `${ns}.json`);
+    const namespaceFiles = namespaces.map((ns) => `${ns}.json`);
 
     for (let i = 0; i < namespaceFiles.length; i++) {
       const file = namespaceFiles[i];
@@ -308,31 +341,29 @@ Return the translated JSON object with the same structure.`;
     this.initializeCLI();
     await this.loadProjectConfig(this.options.config);
 
-    const languagesToTranslate = this.options.language
-      ? [this.options.language]
-      : this.config.languages.filter(
-          (lang) => lang !== this.config.sourceLanguage
-        );
-
-    // Validate namespaces once and reuse the result
+    // Validate languages and namespaces
+    const { valid: validLanguages, errors: invalidLanguages } =
+      this.validateLanguages(this.options.language);
     const { valid: validNamespaces, errors: invalidNamespaces } =
       this.validateNamespaces(this.options.namespace);
 
-    // Initialize statistics
-    this.stats.languages.total = languagesToTranslate.length;
-    this.stats.namespaces.total = validNamespaces.length;
+    // Prompt user to continue or abort if there are validation errors
+    let hasValidationErrors = false;
 
-    this.log("<cyan>🚀 Starting translation process...</cyan>", true);
-    this.log(
-      `<blue>📝 Source:</blue> <bright>${
-        this.config.sourceLanguage
-      }</bright> <yellow>→</yellow> <cyan>Target:</cyan> <green>${languagesToTranslate.join(
-        ", "
-      )}</green>`
-    );
+    if (invalidLanguages.length > 0) {
+      hasValidationErrors = true;
+      this.log(
+        `<red>⚠️  Invalid languages: ${invalidLanguages.join(", ")}</red>`
+      );
+      this.log(
+        `<yellow>Available languages: ${this.config.languages
+          .filter((lang) => lang !== this.config.sourceLanguage)
+          .join(", ")}</yellow>`
+      );
+    }
 
-    // Prompt user to continue or abort (unless --yes flag is used)
     if (invalidNamespaces.length > 0) {
+      hasValidationErrors = true;
       this.log(
         `<red>⚠️  Invalid namespaces: ${invalidNamespaces.join(", ")}</red>`
       );
@@ -341,15 +372,33 @@ Return the translated JSON object with the same structure.`;
           ", "
         )}</yellow>`
       );
+    }
+
+    if (hasValidationErrors) {
       const continueChoice = await this.promptUser(
-        "❓ Continue with valid namespaces only? (y/n): "
+        "❓ Continue with valid languages and namespaces only? (y/n): "
       );
       if (continueChoice !== "y" && continueChoice !== "yes") {
         this.log(`<red>❌ Operation cancelled by user.</red>`);
         process.exit(0);
       }
-      this.log(`<green>✅ Continuing with valid namespaces...</green>`);
+      this.log(
+        `<green>✅ Continuing with valid languages and namespaces...</green>`
+      );
     }
+
+    // Initialize statistics
+    this.stats.languages.total = validLanguages.length;
+    this.stats.namespaces.total = validNamespaces.length;
+
+    this.log("<cyan>🚀 Starting translation process...</cyan>", true);
+    this.log(
+      `<blue>📝 Source:</blue> <bright>${
+        this.config.sourceLanguage
+      }</bright> <yellow>→</yellow> <cyan>Target:</cyan> <green>${validLanguages.join(
+        ", "
+      )}</green>`
+    );
 
     this.log(
       `<magenta>📁 Namespaces:</magenta> <green>${validNamespaces.join(
@@ -358,19 +407,14 @@ Return the translated JSON object with the same structure.`;
     );
     console.log();
 
-    for (const language of languagesToTranslate) {
-      if (!this.config.languages.includes(language)) {
-        this.log(`<red>Unsupported language: ${language}</red>`);
-        this.stats.languages.failed++;
-        continue;
-      }
+    for (const language of validLanguages) {
+      this.stats.namespaces.completed = 0;
 
       const success = await this.processLocale(
         this.config.sourceLanguage,
         language,
-        this.options.namespace
+        validNamespaces
       );
-
       if (success) this.stats.languages.completed++;
       else this.stats.languages.failed++;
 
