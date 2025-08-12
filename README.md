@@ -14,7 +14,7 @@ An AI-powered internationalization tool that automatically translates JSON local
 
 - 🗂️ **Dynamic folder structure support**: Now supports lang/namespace.json, lang.json is not supported yet
 - 💿 **Optimized translation**: Translate only missing keys in the target language files (add a flag to override existing translations)
-- 🤖 **AI Model selection**: Allow users to choose between different OpenAI models (e.g., GPT-3.5, GPT-4) 
+- 🤖 **AI Model selection**: Allow users to choose between different OpenAI models (e.g., GPT-3.5, GPT-4)
 - 🎬 **Init command**: Add a command to initialize the project with default configuration json file
 
 Feel free to contribute to the project by submitting issues or pull requests!
@@ -78,10 +78,10 @@ loaliser
 loaliser --language fr
 ```
 
-### Translate Specific Namespace
+### Translate Specific Namespaces
 
 ```bash
-loaliser --namespace home
+loaliser --namespace home,settings
 ```
 
 ### Translate Specific Language and Namespace
@@ -98,12 +98,11 @@ localiser --config custom-config.json
 
 ## CLI Options
 
-| Option        | Short | Description                     | Default                   |
-| ------------- | ----- | ------------------------------- | ------------------------- |
-| `--language`  | `-l`  | Target language code            | All configured languages  |
-| `--namespace` | `-n`  | Specific namespace to translate | All configured namespaces |
-| `--config`    | `-c`  | Path to configuration file      | `localiser.json`          |
-
+| Option        | Short | Description                      | Default                   |
+| ------------- | ----- | -------------------------------- | ------------------------- |
+| `--language`  | `-l`  | Target language code             | All configured languages  |
+| `--namespace` | `-n`  | Specific namespaces to translate | All configured namespaces |
+| `--config`    | `-c`  | Path to configuration file       | `localiser.json`          |
 
 ## Dependencies
 

@@ -53,7 +53,7 @@ class Localiser {
       .option(
         "-n, --namespace <namespace>",
         "Namespace for translation (e.g., home, common)",
-        ""
+        (value) => value.split(",").map((namespace) => namespace.trim())
       )
       .option(
         "-c, --config <config>",
@@ -103,21 +103,15 @@ class Localiser {
 
   /**
    * Display combined progress bars for languages and namespaces
-   * @param {number} langCurrent - Current language count
-   * @param {number} langTotal - Total language count
-   * @param {number} nsCurrent - Current namespace count within current language
-   * @param {number} nsTotal - Total namespace count within current language
    * @param {string} currentLanguage - Current language being processed
    * @param {string} currentNamespace - Current namespace being processed
    */
-  showCombinedProgress(
-    langCurrent,
-    langTotal,
-    nsCurrent,
-    nsTotal,
-    currentLanguage,
-    currentNamespace
-  ) {
+  showCombinedProgress(currentLanguage, currentNamespace) {
+    const langCurrent = this.stats.languages.completed;
+    const langTotal = this.stats.languages.total;
+    const nsCurrent = this.stats.namespaces.completed;
+    const nsTotal = this.stats.namespaces.total;
+
     const langPercentage = Math.round((langCurrent / langTotal) * 100);
     const nsPercentage = Math.round((nsCurrent / nsTotal) * 100);
 
@@ -202,54 +196,80 @@ Return the translated JSON object with the same structure.`;
   }
 
   /**
+   * Prompt user for input with a question
+   * @param {string} question - Question to ask the user
+   * @returns {Promise<string>} User's response
+   */
+  async promptUser(question) {
+    const readline = await import("readline");
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    return new Promise((resolve) => {
+      rl.question(question, (answer) => {
+        rl.close();
+        resolve(answer.trim().toLowerCase());
+      });
+    });
+  }
+
+  /**
+   * Validate that specified namespaces exist in the project configuration
+   * @param {Array<string>} inputNamespaces - Namespaces to validate
+   * @returns {Object} Validation result with valid namespaces and any errors
+   */
+  validateNamespaces(inputNamespaces) {
+    if (!inputNamespaces || inputNamespaces.length === 0) {
+      return { valid: this.config.namespaces, errors: [] };
+    }
+    const validNamespaces = [];
+    const invalidNamespaces = [];
+
+    for (const namespace of inputNamespaces) {
+      if (this.config.namespaces.includes(namespace)) {
+        validNamespaces.push(namespace);
+      } else invalidNamespaces.push(namespace);
+    }
+
+    return { valid: validNamespaces, errors: invalidNamespaces };
+  }
+
+  /**
    * Process locale files for a specific language
    * @param {string} sourceLanguage - Source language code
    * @param {string} targetLanguage - Target language code
-   * @param {string} namespace - Specific namespace to process
+   * @param {Array<string>} namespaces - Specific namespaces to process (pre-validated)
    * @returns {Promise<boolean>} Success status
    */
-  async processLocale(sourceLanguage, targetLanguage, namespace) {
+  async processLocale(sourceLanguage, targetLanguage, namespaces) {
     const sourceLanguageDir = path.join(this.config.directory, sourceLanguage);
     const targetLanguageDir = path.join(this.config.directory, targetLanguage);
 
     await fs.ensureDir(targetLanguageDir);
 
-    const namespaceFiles = namespace
-      ? [`${namespace}.json`]
-      : this.config.namespaces.map((ns) => `${ns}.json`);
-
-    let successCount = 0;
-    let totalCount = namespaceFiles.length;
+    // Use pre-validated namespaces (validation already done in run())
+    const validNamespaces =
+      namespaces && namespaces.length > 0 ? namespaces : this.config.namespaces;
+    const namespaceFiles = validNamespaces.map((ns) => `${ns}.json`);
 
     for (let i = 0; i < namespaceFiles.length; i++) {
       const file = namespaceFiles[i];
       const namespaceName = file.replace(".json", "");
-      const currentNamespaceIndex = i + 1;
 
-      this.showCombinedProgress(
-        this.stats.languages.completed,
-        this.stats.languages.total,
-        currentNamespaceIndex,
-        totalCount,
-        targetLanguage,
-        namespaceName
-      );
+      this.showCombinedProgress(targetLanguage, namespaceName);
 
       const success = await this.processNamespaceFile(
         sourceLanguageDir,
         targetLanguageDir,
         file
       );
-
-      if (success) {
-        successCount++;
-        this.stats.namespaces.completed++;
-      } else {
-        this.stats.namespaces.failed++;
-      }
+      if (success) this.stats.namespaces.completed++;
+      else this.stats.namespaces.failed++;
     }
 
-    return successCount === totalCount;
+    return this.stats.namespaces.completed === this.stats.namespaces.total;
   }
 
   /**
@@ -276,7 +296,7 @@ Return the translated JSON object with the same structure.`;
         await fs.writeJson(targetFilePath, translatedContent, { spaces: 2 });
         return true;
       }
-    } catch (error) {}
+    } catch (_) {}
 
     return false;
   }
@@ -294,12 +314,13 @@ Return the translated JSON object with the same structure.`;
           (lang) => lang !== this.config.sourceLanguage
         );
 
+    // Validate namespaces once and reuse the result
+    const { valid: validNamespaces, errors: invalidNamespaces } =
+      this.validateNamespaces(this.options.namespace);
+
     // Initialize statistics
     this.stats.languages.total = languagesToTranslate.length;
-    this.stats.namespaces.total = this.options.namespace
-      ? 1
-      : this.config.namespaces.length;
-    this.stats.namespaces.total *= this.stats.languages.total;
+    this.stats.namespaces.total = validNamespaces.length;
 
     this.log("<cyan>🚀 Starting translation process...</cyan>", true);
     this.log(
@@ -309,10 +330,31 @@ Return the translated JSON object with the same structure.`;
         ", "
       )}</green>`
     );
+
+    // Prompt user to continue or abort (unless --yes flag is used)
+    if (invalidNamespaces.length > 0) {
+      this.log(
+        `<red>⚠️  Invalid namespaces: ${invalidNamespaces.join(", ")}</red>`
+      );
+      this.log(
+        `<yellow>Available namespaces: ${this.config.namespaces.join(
+          ", "
+        )}</yellow>`
+      );
+      const continueChoice = await this.promptUser(
+        "❓ Continue with valid namespaces only? (y/n): "
+      );
+      if (continueChoice !== "y" && continueChoice !== "yes") {
+        this.log(`<red>❌ Operation cancelled by user.</red>`);
+        process.exit(0);
+      }
+      this.log(`<green>✅ Continuing with valid namespaces...</green>`);
+    }
+
     this.log(
-      `<magenta>📁 Namespaces:</magenta> <green>${
-        this.options.namespace || this.config.namespaces.join(", ")
-      }</green>`
+      `<magenta>📁 Namespaces:</magenta> <green>${validNamespaces.join(
+        ", "
+      )}</green>`
     );
     console.log();
 
@@ -332,14 +374,7 @@ Return the translated JSON object with the same structure.`;
       if (success) this.stats.languages.completed++;
       else this.stats.languages.failed++;
 
-      this.showCombinedProgress(
-        this.stats.languages.completed,
-        this.stats.languages.total,
-        0,
-        0,
-        language,
-        "completed"
-      );
+      this.showCombinedProgress(language, "completed");
     }
 
     console.log();
